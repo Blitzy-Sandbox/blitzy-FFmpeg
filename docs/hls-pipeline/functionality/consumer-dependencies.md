@@ -41,7 +41,7 @@ For component-level descriptions of segment generation and playlist construction
 
 Any client that purports to play HLS — iOS and tvOS native players, AVPlayer on macOS, Android ExoPlayer, hls.js in the browser, Roku channels, smart-TV firmware, professional broadcast monitoring tools — must accept the M3U8 manifest shape this muxer emits. Three shape contracts dominate everything else: the version number on line 2 of every playlist (which controls which other tags the client must understand), the media-sequence integer that lets the client deduplicate already-fetched segments, and the target-duration integer that tells the client how often to refresh.
 
-#### Engineer Detail
+#### Technical Detail
 
 **EXT-X-VERSION negotiation contract.** The version number on line 2 of every playlist is computed at `[libavformat/hlsenc.c:L1551-L1571]` as a five-outcome decision matrix:
 
@@ -77,7 +77,7 @@ The bug would not be reproducible under the FATE test suite (whose reference str
 
 When the muxer's output URL is an `http://` or `https://` URL, the M3U8 playlist and every segment file are uploaded to a remote origin server instead of written to local disk. The CDN ingest endpoint that receives those uploads is a downstream consumer with its own contract: it must accept the muxer's choice of HTTP method (PUT by default), allow long-running persistent connections (which the muxer reuses to amortize TLS handshake cost), and tolerate HTTP DELETE for old-segment cleanup in live sliding-window mode.
 
-#### Engineer Detail
+#### Technical Detail
 
 **HTTP PUT default.** In `set_http_options` at `[libavformat/hlsenc.c:L337-L341]`, when the user does not explicitly set the `method` AVOption, the muxer forces `method=PUT` for any HTTP-protocol output URL:
 
@@ -109,7 +109,7 @@ The FFmpeg `tests/` tree contains FATE (FFmpeg Automated Testing Environment) re
 
 **This section is a survey only.** The `tests/` directory is explicitly out of scope for this documentation effort per AAP §0.8.2.2. No test files are read, modified, or extended by this documentation. The purpose of this section is solely to make integrators and refactor-authors aware that the HLS pipeline has a byte-exact reference contract enforced by the project's own continuous-integration system. Anyone planning a refactor must coordinate with the test maintainer to update references in lockstep with code changes.
 
-#### Engineer Detail
+#### Technical Detail
 
 The HLS pipeline's test surface is, by convention, located in:
 
@@ -139,7 +139,7 @@ Suppose a refactor of `ff_hls_write_playlist_header` switched the `#EXT-X-TARGET
 
 FFmpeg's DASH muxer reuses the HLS pipeline's playlist tag-writer translation unit (`hlsplaylist.o`) to emit HLS-format manifests *alongside* its native DASH MPD manifest. This is the most surprising hidden dependency in the HLS pipeline: a refactor that changes the ABI or signatures of the eight `ff_hls_write_*` functions does not just change HLS muxer behavior — it changes DASH muxer behavior simultaneously, because both muxers link against the same compiled object file.
 
-#### Engineer Detail
+#### Technical Detail
 
 **Build-level coupling.** The coupling is declared in one line of the build system at `[libavformat/Makefile:L189]`:
 
@@ -178,7 +178,7 @@ The reverse direction is just as fragile: adding a new feature to `ff_hls_write_
 
 FFmpeg ships a generic alternative segmenter at `[libavformat/segment.c]`, registered as `ff_segment_muxer` and `ff_stream_segment_muxer`. It is a separate format from the HLS muxer, with separate code, separate option table, and separate output conventions. It can emit an M3U8 playlist as a side-channel artifact, but the M3U8 it emits is not byte-compatible with the HLS muxer's output, and the segment files it produces are configured through a different mechanism. Integrators sometimes mistake one muxer for the other because both produce `.ts` files with an accompanying `.m3u8`; the existing user-facing documentation at `[doc/muxers.texi:§hls]` explicitly cross-references the alternative.
 
-#### Engineer Detail
+#### Technical Detail
 
 **Registration.** Two muxers are registered:
 
@@ -211,31 +211,22 @@ The integrator's diagnostic loop is slow because the new manifest *is* valid M3U
 
 The HLS muxer is a *load-bearing* component for any FFmpeg consumer that publishes HLS. There is no in-tree fallback for `-f hls`: the `segment` muxer is the closest alternative but produces different M3U8 conventions and does not implement the HLS feature set; the DASH muxer publishes DASH MPD (with HLS-via-`hlsplaylist` only as a side channel), not the same shape as the HLS muxer's primary output. A hypothetical removal or breakage of `hlsenc.c` would silently degrade the HLS publishing capability of every downstream consumer that has not built in its own fallback logic.
 
-#### Engineer Detail
+#### Technical Detail
 
-**No fallback in `ff_hls_muxer`.** The format-registration definition at `[libavformat/hlsenc.c:L3191-L3207]`:
+**No fallback in `ff_hls_muxer`.** The format-registration definition at `[libavformat/hlsenc.c:L3191-L3207]` declares the muxer's identity, codec defaults, format flags, private class, and lifecycle callback slots. The field assignments are summarized in the table below; the registration itself contains no alternative or deprecation pointer.
 
-```c
-const FFOutputFormat ff_hls_muxer = {
-    .p.name           = "hls",
-    .p.long_name      = NULL_IF_CONFIG_SMALL("Apple HTTP Live Streaming"),
-    .p.extensions     = "m3u8",
-    .p.audio_codec    = AV_CODEC_ID_AAC,
-    .p.video_codec    = AV_CODEC_ID_H264,
-    .p.subtitle_codec = AV_CODEC_ID_WEBVTT,
-    .p.flags          = AVFMT_NOFILE | AVFMT_GLOBALHEADER | AVFMT_NODIMENSIONS,
-    .p.priv_class     = &hls_class,
-    .flags_internal   = FF_OFMT_FLAG_ALLOW_FLUSH,
-    .priv_data_size = sizeof(HLSContext),
-    .init           = hls_init,
-    .write_header   = hls_write_header,
-    .write_packet   = hls_write_packet,
-    .write_trailer  = hls_write_trailer,
-    .deinit         = hls_deinit,
-};
-```
+| Field | Value | Notes |
+|---|---|---|
+| `.p.name` | `"hls"` | The name resolved by `av_guess_format("hls", ...)` |
+| `.p.long_name` | `"Apple HTTP Live Streaming"` (via `NULL_IF_CONFIG_SMALL`) | Used for diagnostic messages |
+| `.p.extensions` | `"m3u8"` | The extension `-f` autodetect maps to this muxer |
+| `.p.audio_codec` / `.p.video_codec` / `.p.subtitle_codec` | `AV_CODEC_ID_AAC` / `AV_CODEC_ID_H264` / `AV_CODEC_ID_WEBVTT` | Default codecs when the caller does not specify |
+| `.p.flags` | `AVFMT_NOFILE \| AVFMT_GLOBALHEADER \| AVFMT_NODIMENSIONS` | See §"A Note on Format-Registration Flags" above |
+| `.p.priv_class` | `&hls_class` | The `AVClass` exposing the AVOption table |
+| `.priv_data_size` | `sizeof(HLSContext)` | Storage allocated by libavformat for the muxer's private state |
+| `.init`/`.write_header`/`.write_packet`/`.write_trailer`/`.deinit` | `hls_init` / `hls_write_header` / `hls_write_packet` / `hls_write_trailer` / `hls_deinit` | The five lifecycle callbacks |
 
-declares no alternative or deprecation pointer. Callers that resolve the muxer by name `"hls"` via `av_guess_format` either receive a pointer to this `FFOutputFormat` or `NULL` — there is no graceful degradation path inside libavformat. Applications must implement their own fallback logic if they want one. `[inferred — no direct source]`
+Callers that resolve the muxer by name `"hls"` via `av_guess_format` either receive a pointer to this `FFOutputFormat` or `NULL` — there is no graceful degradation path inside libavformat. Applications must implement their own fallback logic if they want one. `[inferred — no direct source]`
 
 **`allformats.c` registration.** The two HLS format symbols are declared at `[libavformat/allformats.c:L216-L217]`:
 
@@ -252,7 +243,7 @@ These declarations are gathered by the `allformats.c` registration mechanism int
 OBJS-$(CONFIG_HLS_MUXER)                 += hlsenc.o hlsplaylist.o
 ```
 
-Disabling `CONFIG_HLS_MUXER` at configure time would omit both `hlsenc.o` and `hlsplaylist.o` from the build. This has a second-order effect on the DASH muxer: `dashenc.c` *expects* `hlsplaylist.o` to be present in its object set (see `[libavformat/Makefile:L189]`), but only because it independently lists `hlsplaylist.o` in its own line. Disabling `CONFIG_HLS_MUXER` does *not* prevent the DASH muxer from also including `hlsplaylist.o` — the two lines accumulate into the same object set independently, so DASH continues to link `hlsplaylist.o` even when HLS is disabled. This is a subtle build-system design choice that makes the DASH muxer robust against HLS being unconfigured.
+Disabling `CONFIG_HLS_MUXER` at configure time would omit both `hlsenc.o` and `hlsplaylist.o` from the build. This has a second-order effect on the DASH muxer: `dashenc.c` *expects* `hlsplaylist.o` to be present in its object set (see `[libavformat/Makefile:L189]`), but only because it independently lists `hlsplaylist.o` in its own line. Disabling `CONFIG_HLS_MUXER` does *not* prevent the DASH muxer from also including `hlsplaylist.o` — the two lines accumulate into the same object set independently, so DASH continues to link `hlsplaylist.o` even when HLS is disabled. This is a build-system design choice that keeps the DASH muxer independent of whether HLS is configured.
 
 #### Worked Breakage Scenario
 

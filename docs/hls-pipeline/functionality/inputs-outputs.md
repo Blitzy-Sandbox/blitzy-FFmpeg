@@ -102,16 +102,7 @@ The HLS muxer exposes **35 distinct user-tunable AVOptions** plus **23 `AV_OPT_T
 
 ### Source Anchor
 
-The complete option array is declared as:
-
-```c
-static const AVOption options[] = {
-    ...
-    {NULL},
-};
-```
-
-at `[libavformat/hlsenc.c:L3121-L3181]`. The `OFFSET(x)` macro at L3119 expands to `offsetof(HLSContext, x)` and locates each option's storage inside `HLSContext`. The `E` macro at L3120 expands to `AV_OPT_FLAG_ENCODING_PARAM` — every option carries this flag, marking them all as muxer-side (write-direction) settings.
+The complete option array is declared as `static const AVOption options[] = { /* 58 entries */, {NULL} };` at `[libavformat/hlsenc.c:L3121-L3181]`. The `OFFSET(x)` macro at L3119 expands to `offsetof(HLSContext, x)` and locates each option's storage inside `HLSContext`. The `E` macro at L3120 expands to `AV_OPT_FLAG_ENCODING_PARAM` — every option carries this flag, marking them all as muxer-side (write-direction) settings.
 
 ### §5.1 — User-Tunable AVOptions (35 Entries)
 

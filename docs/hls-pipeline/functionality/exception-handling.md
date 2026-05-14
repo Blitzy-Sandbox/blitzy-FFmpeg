@@ -29,7 +29,7 @@ A single muxer option, `ignore_io_errors`, gates whether transient I/O failures 
 
 The muxer rejects the call when the inputs it receives are malformed or unrecoverable: an out-of-memory condition in a helper buffer, a zero-length `strftime` expansion of a filename template, an empty `%v` variant-name substitution, or a key info file with an empty URL or empty key path. The muxer returns `AVERROR(EINVAL)` for "malformed input value" and `AVERROR(ENOMEM)` for "could not allocate working memory"; the caller treats either as a fatal error for the current muxing session.
 
-#### Engineer Detail
+#### Technical Detail
 
 - `[libavformat/hlsenc.c:L278]` — `strftime_expand` returns `AVERROR(ENOMEM)` when the working buffer allocation fails.
 - `[libavformat/hlsenc.c:L285]` — `strftime_expand` returns `AVERROR(EINVAL)` when `strftime` produces a zero-length string from the user-supplied format.
@@ -60,7 +60,7 @@ The caller checks the return code of `avformat_write_header`, `av_write_frame`, 
 
 When the muxer would normally cut a new segment at a video keyframe but the current packet is not a keyframe (and the `HLS_SPLIT_BY_TIME` flag is not set), the cut is silently skipped. No `AVERROR` is returned. The current segment grows past its target duration until the next keyframe arrives. This is intentional behaviour, not a defect — the HLS specification requires every segment to begin with a keyframe, so the muxer waits rather than emit a segment that no client could decode from its start. Integrators must be aware of it because the only visible effect is that the published `#EXTINF` durations exceed `hls_time`; there is no error code to catch.
 
-#### Engineer Detail
+#### Technical Detail
 
 - `[libavformat/hlsenc.c:L2473-L2475]` — the `can_split` flag is computed inside the `vs->has_video` branch as `(codec_type == VIDEO) && ((pkt->flags & AV_PKT_FLAG_KEY) || (hls->flags & HLS_SPLIT_BY_TIME))`. For a non-keyframe video packet with `HLS_SPLIT_BY_TIME` unset, `can_split` is `0`.
 - `[libavformat/hlsenc.c:L2478-L2479]` — when `pkt->pts == AV_NOPTS_VALUE`, both `is_ref_pkt` and `can_split` are forced to `0`. A stream that never carries a presentation timestamp is therefore never a candidate for cutting.
@@ -87,7 +87,7 @@ The integrator ensures the upstream video encoder emits keyframes at intervals n
 
 Opening a segment file, writing bytes into it, or closing it can fail for any of the reasons the underlying protocol can fail: disk full, network unavailable, permission denied, HTTP 5xx, socket reset, or a stale persistent connection that the server has just torn down. The muxer captures the underlying `AVERROR(*)` code from the protocol layer and, by default, returns it to the caller. With the `ignore_io_errors` option turned on, the muxer logs a warning and continues to the next packet so that long-running network output survives transient failures. The option is documented at `[libavformat/hlsenc.c:L3178]`.
 
-#### Engineer Detail
+#### Technical Detail
 
 - `[libavformat/hlsenc.c:L292-L311]` — `hlsenc_io_open` wraps `s->io_open` (file, HTTP, or any registered protocol). The initial sentinel `err = AVERROR_MUXER_NOT_FOUND;` at `[libavformat/hlsenc.c:L297]` is only ever observed by the caller if no code path overwrites it — in normal use it is overwritten on the very next line by `s->io_open(...)` returning a real protocol error code (e.g., `AVERROR(ENOENT)`, `AVERROR(EACCES)`, an HTTP-status-derived `AVERROR(EIO)`).
 - `[libavformat/hlsenc.c:L2571-L2578]` — the segment-file open path inside `hls_write_packet` includes the explicit short-circuit `return hls->ignore_io_errors ? 0 : ret;` after logging at either `AV_LOG_WARNING` or `AV_LOG_ERROR` level depending on the flag.
@@ -118,7 +118,7 @@ Opening a segment file, writing bytes into it, or closing it can fail for any of
 
 When the input stream contains a content discontinuity — a deliberate timestamp gap, a source change between two concatenated programs, a codec-parameter change such as a resolution switch, or the muxer restarting against an existing playlist — the muxer sets a per-variant flag that causes the next segment's playlist entry to be preceded by an `#EXT-X-DISCONTINUITY` line. This is not an error condition; no `AVERROR(*)` is returned. The tag is part of the HLS protocol and tells downstream players to reset their decoder state at that segment boundary.
 
-#### Engineer Detail
+#### Technical Detail
 
 - `[libavformat/hlsenc.c:L1090-L1093]` — inside `hls_append_segment`, when `vs->discontinuity` is set the new segment record is flagged `en->discont = 1` and the per-variant flag is cleared so the discontinuity is consumed once and never repeated on subsequent segments.
 - `[libavformat/hlsenc.c:L3100-L3102]` — when the `HLS_APPEND_LIST` flag is set (muxer reloading and appending to a previously written playlist), `vs->discontinuity = 1` is set during initialization to mark the boundary between previously-published segments and the new ones the muxer is about to produce.
@@ -146,7 +146,7 @@ No recovery is needed. Discontinuity is a published signal: downstream HLS-compl
 
 When the muxer reloads an existing playlist on startup (the `HLS_APPEND_LIST` flag) and that playlist contains `#EXT-X-PROGRAM-DATE-TIME` lines, the wall-clock anchor is read from the most recent such line in the existing playlist and rolled forward by each parsed segment's duration so that the newly produced segments inherit the correct continued wall-clock timeline. The mechanism guarantees that a player observing the reloaded stream sees a single contiguous time axis even though the muxer restarted partway through. No error is raised on either the reload path or the emission path.
 
-#### Engineer Detail
+#### Technical Detail
 
 - `[libavformat/hlsenc.c:L1226-L1244]` — inside `parse_playlist`, the muxer encounters `#EXT-X-PROGRAM-DATE-TIME:%d-%d-%dT%d:%d:%d.%lf` lines and parses them with `sscanf` into a `struct tm`, then computes the local-time anchor via `mktime`. A malformed line (wrong field count) sets `ret = AVERROR_INVALIDDATA` at `[libavformat/hlsenc.c:L1231]`.
 - `[libavformat/hlsenc.c:L1273-L1275]` — for each subsequent segment line parsed from the existing playlist, the rolling anchor `discont_program_date_time` is written onto the segment's `discont_program_date_time` field, then advanced by that segment's duration so the next segment inherits the post-advance value.
@@ -171,7 +171,7 @@ The `AVERROR_INVALIDDATA` returned by a malformed reloaded playlist propagates f
 
 Writing a single segment to its final destination involves several stages: flushing the sub-muxer's dynamic buffer into the segment file's `AVIOContext`, optionally writing the fMP4 `styp` box and initialization data, completing the write through `hlsenc_io_close`, and (when `HLS_TEMP_FILE` is set) renaming `<segment>.tmp` to its final filename. A failure at any of these stages returns a negative `AVERROR(*)`. The HTTP-upload close path includes a single automatic retry with a fresh session; all other failures propagate unless `ignore_io_errors` masks them as described in the I/O Failures section.
 
-#### Engineer Detail
+#### Technical Detail
 
 - `[libavformat/hlsenc.c:L2582-L2587]` — `flush_dynbuf` propagates the underlying `ret` when the dynamic-buffer-to-file copy fails; the call site frees the temporary filename and dictionary before returning. The flush itself is a wrapper around `avio_write` and `avio_close_dyn_buf` against the sub-muxer's in-memory accumulator.
 - `[libavformat/hlsenc.c:L2589-L2599]` — `hlsenc_io_close` failure triggers a one-shot retry: `ff_format_io_close(s, &vs->out);` discards the failed I/O context, `hlsenc_io_open` is called again to establish a fresh session, `reflush_dynbuf` re-primes the buffer, and `hlsenc_io_close` is invoked once more. A second failure is not retried; control returns to the caller with the underlying error.
@@ -202,7 +202,7 @@ On rename failure, the application may re-attempt the rename out-of-band; the mu
 
 When the `HLS_DELETE_SEGMENTS` flag is set and the sliding window evicts a segment from the playlist, the muxer issues an HTTP `DELETE` request (for HTTP output) or a filesystem `unlink` (for file output) on the evicted segment URL. The request uses a dedicated `http_delete` `AVIOContext` field on the muxer's private data. A DELETE failure is logged at `AV_LOG_ERROR` level and the segment record is freed regardless — there is no retry, and the muxer does not return an `AVERROR(*)` to the caller. Orphaned segment files on the storage backend accumulate; periodic out-of-band cleanup is the integrator's responsibility.
 
-#### Engineer Detail
+#### Technical Detail
 
 - `[libavformat/hlsenc.c:L261]` — `AVIOContext *http_delete;` field on `HLSContext`. It is a dedicated `AVIOContext` so that the DELETE method override does not interfere with the regular PUT path used for segment uploads.
 - `[libavformat/hlsenc.c:L525-L527]` — the log path `"failed to delete old segment %s: %s\n"` inside `hls_delete_file` records the failed unlink/DELETE; the function then returns `0` so the caller's iteration continues unchanged.
@@ -228,7 +228,7 @@ Orphaned segment files accumulate on the CDN or origin server; periodic out-of-b
 
 When the HLS demuxer reloads a live playlist and finds the manifest's `#EXT-X-MEDIA-SEQUENCE` has not advanced (no new segments since the last fetch), the demuxer increments a per-playlist hold counter. After a configurable number of consecutive identical reloads — default 1000, declared at `[libavformat/hls.c:L2878-L2879]` — the demuxer returns `AVERROR_EOF` from `av_read_frame` to signal end-of-stream. The mechanism gives a publisher time to recover from a temporary stall before the player gives up.
 
-#### Engineer Detail
+#### Technical Detail
 
 - `[libavformat/hls.c:L1624-L1631]` — the retry-counter loop inside the reload path: `v->m3u8_hold_counters++` when the latest reload's last sequence number matches the previous reload's, and `return AVERROR_EOF;` when the counter reaches `c->m3u8_hold_counters`.
 - `[libavformat/hls.c:L2878-L2879]` — the `m3u8_hold_counters` AVOption declaration: `OFFSET(m3u8_hold_counters), AV_OPT_TYPE_INT, {.i64 = 1000}`. The default of 1000 multiplied by the half-target-duration polling cadence gives roughly 1000 × `target_duration/2` of patience before declaring EOF.
@@ -255,7 +255,7 @@ The caller treats `AVERROR_EOF` as graceful end-of-stream and closes the demuxer
 
 When the HLS demuxer encounters an `#EXT-X-KEY:METHOD=AES-128,URI=...` line in a playlist, it materializes the absolute key URL onto each affected segment record so that the segment-fetch path can fetch the 16-byte key from the URI as part of opening the segment. A failed fetch (HTTP 404, HTTP 5xx, connection timeout, DNS failure, etc.) propagates as the underlying protocol's `AVERROR(*)` code — typically `AVERROR(EIO)` or `AVERROR_PROTOCOL_NOT_FOUND` if the required protocol is not built into the binary. The demuxer itself does not retry key fetches.
 
-#### Engineer Detail
+#### Technical Detail
 
 - `[libavformat/hls.c:L867-L880]` — inside `parse_playlist`, the `#EXT-X-KEY:` branch captures the `METHOD`, `URI`, and optional `IV` via `handle_key_args`. Recognized methods are `AES-128` (setting `key_type = KEY_AES_128`) and `SAMPLE-AES` (`key_type = KEY_SAMPLE_AES`). The local `key[]` buffer holds the URI string for later attachment to each segment.
 - `[libavformat/hls.c:L1017-L1029]` — when a segment line is parsed under an active `key_type != KEY_NONE`, the demuxer calls `ff_make_absolute_url` to resolve the URI against the playlist URL and `av_strdup` to attach the result to the segment record. `av_strdup` failure returns `AVERROR(ENOMEM)` at `[libavformat/hls.c:L1027]`; `ff_make_absolute_url` producing an empty string returns `AVERROR_INVALIDDATA` at `[libavformat/hls.c:L1020]`.
