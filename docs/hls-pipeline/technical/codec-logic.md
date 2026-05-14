@@ -236,7 +236,7 @@ The flags are at `[libavformat/hlsenc.c:L106-L108]`. The `%d` placeholder is rep
 | Any second-level flag set but `use_localtime` NOT set | Configuration rejected by `sls_flag_check_duration_size_index` (returns `AVERROR(EINVAL)`) | Second-level templating requires `use_localtime` | `[libavformat/hlsenc.c:L948-L969]` |
 | Any second-level flag set and `file:` protocol NOT used | Configuration rejected by `sls_flag_check_duration_size` | Second-level templating requires file output (cannot be HTTP) | `[libavformat/hlsenc.c:L971-L989]` |
 
-The `HLS_MICROSECOND_UNIT` constant is defined at `[libavformat/hlsenc.c:L73]` as `1000000`, so a 2.7 s segment with `HLS_SECOND_LEVEL_SEGMENT_DURATION` yields a `%t` substitution of `2700000`. Composite templates (e.g., `seg_%d_%t_%s.ts`) are supported by chaining substitutions: index resolves at open, then duration and size resolve at close.
+The `HLS_MICROSECOND_UNIT` constant is defined at `[libavformat/hlsenc.c:L72]` as `1000000`, so a 2.7 s segment with `HLS_SECOND_LEVEL_SEGMENT_DURATION` yields a `%t` substitution of `2700000`. Composite templates (e.g., `seg_%d_%t_%s.ts`) are supported by chaining substitutions: index resolves at open, then duration and size resolve at close.
 
 ---
 
@@ -443,7 +443,7 @@ The parser's per-segment behavior is critical: `key_type` is captured into each 
 ## Cross-References
 
 - **Enum value definitions and struct field semantics** — see [`data-model.md`](data-model.md):
-  - `HLSFlags` enum (full table of 16 flags with bit positions): `data-model.md` §HLSFlags
+  - `HLSFlags` enum (full table of 15 flags with bit positions): `data-model.md` §HLSFlags
   - `SegmentType` enum (`SEGMENT_TYPE_MPEGTS`, `SEGMENT_TYPE_FMP4`): `data-model.md` §SegmentType
   - `StartSequenceSourceType` enum (4 modes): `data-model.md` §StartSequenceSourceType
   - `PlaylistType` enum (muxer side: NONE/EVENT/VOD): `data-model.md` §PlaylistType (muxer-side)
