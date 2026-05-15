@@ -161,7 +161,7 @@ These entries are not standalone options — they bind to a parent option's `.un
 
 #### Aliases for `hls_flags` (`.unit = "flags"`) — 15 entries
 
-The 15 bit-mask flags are ORed together when combining behaviors. The integer value column shows the symbolic constant the alias resolves to; the actual numeric bit value is defined by the `HLSFlags` enum in `[libavformat/hlsenc.c:L99-L114]` — see [`../technical/data-model.md`](../technical/data-model.md).
+The 15 bit-mask flags are ORed together when combining behaviors. The integer value column shows the symbolic constant the alias resolves to; the actual numeric bit value is defined by the `HLSFlags` enum in `[libavformat/hlsenc.c:L96-L113]` — see [`../technical/data-model.md`](../technical/data-model.md).
 
 | Const Name | Constant | Effect | Source |
 |---|---|---|---|

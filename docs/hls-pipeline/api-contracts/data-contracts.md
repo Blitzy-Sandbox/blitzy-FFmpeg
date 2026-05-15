@@ -395,7 +395,7 @@ The MPEG-TS PMT loop in the parent demuxer matches these `stream_type` values, s
 
 ## Contract: FFOutputFormat Field Assignments (Muxer Registration)
 
-The `ff_hls_muxer` symbol is the registration record consumed by `libavformat`'s format-lookup tables. It encodes the muxer's name, supported codecs, flags, private-data size, and the five lifecycle callbacks. The complete record spans `[libavformat/hlsenc.c:L3191-L3206]`. Every field is part of the public API contract — changing any value alters the muxer's discovery, defaults, behavior, or memory layout in a way that downstream callers observe.
+The `ff_hls_muxer` symbol is the registration record consumed by `libavformat`'s format-lookup tables. It encodes the muxer's name, supported codecs, flags, private-data size, and the five lifecycle callbacks. The complete record spans `[libavformat/hlsenc.c:L3191-L3207]`. Every field is part of the public API contract — changing any value alters the muxer's discovery, defaults, behavior, or memory layout in a way that downstream callers observe.
 
 | Field | Value | Effect | Citation |
 |-------|-------|--------|----------|
@@ -417,7 +417,7 @@ The `ff_hls_muxer` symbol is the registration record consumed by `libavformat`'s
 
 ## Contract: FFInputFormat Field Assignments (Demuxer Registration)
 
-The `ff_hls_demuxer` symbol mirrors the muxer registration on the demuxer side. The complete record spans `[libavformat/hls.c:L2900-L2911]`. Like the muxer registration, every field is part of the public API contract.
+The `ff_hls_demuxer` symbol mirrors the muxer registration on the demuxer side. The complete record spans `[libavformat/hls.c:L2900-L2912]`. Like the muxer registration, every field is part of the public API contract.
 
 | Field | Value | Effect | Citation |
 |-------|-------|--------|----------|
@@ -485,14 +485,14 @@ The `hls_start_number_source` `AVOption` exposes the first four values via `AV_O
 
 ## Contract: PlaylistType Enum Values (Muxer-side)
 
-The muxer-side `PlaylistType` enum drives `EXT-X-PLAYLIST-TYPE` emission and gates several downstream behaviors (e.g., `EVENT` permits later additions but no rewrites; `VOD` mandates a final `EXT-X-ENDLIST`). The enum definition spans `[libavformat/hlsplaylist.h:L30-L35]`.
+The muxer-side `PlaylistType` enum drives `EXT-X-PLAYLIST-TYPE` emission and gates several downstream behaviors (e.g., `EVENT` permits later additions but no rewrites; `VOD` mandates a final `EXT-X-ENDLIST`). The enum definition spans `[libavformat/hlsplaylist.h:L31-L36]`.
 
 | Symbol | Value | Effect | Citation |
 |--------|-------|--------|----------|
-| `PLAYLIST_TYPE_NONE` | `0` | Live mode (default); no `EXT-X-PLAYLIST-TYPE` tag emitted. | `[libavformat/hlsplaylist.h:L31]` |
-| `PLAYLIST_TYPE_EVENT` | `1` | Event mode; emits `#EXT-X-PLAYLIST-TYPE:EVENT`; the playlist may grow but existing entries must not be removed or rewritten. | `[libavformat/hlsplaylist.h:L32]` |
-| `PLAYLIST_TYPE_VOD` | `2` | VOD mode; emits `#EXT-X-PLAYLIST-TYPE:VOD`; the playlist is finalized on `hls_write_trailer` with `EXT-X-ENDLIST` (unless `HLS_OMIT_ENDLIST` is set). | `[libavformat/hlsplaylist.h:L33]` |
-| `PLAYLIST_TYPE_NB` | `3` | Sentinel used as the option's upper bound (`PLAYLIST_TYPE_NB - 1`); not user-settable. | `[libavformat/hlsplaylist.h:L34]` |
+| `PLAYLIST_TYPE_NONE` | `0` | Live mode (default); no `EXT-X-PLAYLIST-TYPE` tag emitted. | `[libavformat/hlsplaylist.h:L32]` |
+| `PLAYLIST_TYPE_EVENT` | `1` | Event mode; emits `#EXT-X-PLAYLIST-TYPE:EVENT`; the playlist may grow but existing entries must not be removed or rewritten. | `[libavformat/hlsplaylist.h:L33]` |
+| `PLAYLIST_TYPE_VOD` | `2` | VOD mode; emits `#EXT-X-PLAYLIST-TYPE:VOD`; the playlist is finalized on `hls_write_trailer` with `EXT-X-ENDLIST` (unless `HLS_OMIT_ENDLIST` is set). | `[libavformat/hlsplaylist.h:L34]` |
+| `PLAYLIST_TYPE_NB` | `3` | Sentinel used as the option's upper bound (`PLAYLIST_TYPE_NB - 1`); not user-settable. | `[libavformat/hlsplaylist.h:L35]` |
 
 The `hls_playlist_type` `AVOption` exposes the EVENT and VOD values via `AV_OPT_TYPE_CONST` aliases at `[libavformat/hlsenc.c:L3163-L3164]`; the NONE value is the default and has no alias.
 
@@ -553,7 +553,7 @@ The following checklist is used by reviewers and by the documentation author bef
 - [x] All 4 `STREAM_TYPE_HLS_SE_*` constants at `[libavformat/mpegts.h:L177-L180]` present with hex values.
 - [x] All 5 `StartSequenceSourceType` values at `[libavformat/hlsenc.c:L58-L62]` enumerated (4 user-visible + 1 sentinel).
 - [x] All 3 demuxer `KeyType` values at `[libavformat/hls.c:L72-L74]` enumerated.
-- [x] All 4 muxer-side `PlaylistType` values at `[libavformat/hlsplaylist.h:L31-L34]` enumerated (3 user-visible + 1 sentinel).
+- [x] All 4 muxer-side `PlaylistType` values at `[libavformat/hlsplaylist.h:L32-L35]` enumerated (3 user-visible + 1 sentinel).
 - [x] 2 `SegmentType` values at `[libavformat/hlsenc.c:L116-L117]` enumerated.
 - [x] `FFOutputFormat` 15-field table present at `[libavformat/hlsenc.c:L3192-L3206]` with line citations.
 - [x] `FFInputFormat` 11-field table present at `[libavformat/hls.c:L2901-L2911]` with line citations.
