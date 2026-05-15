@@ -586,7 +586,7 @@ The table below provides a one-line summary per interface for quick lookup. Each
 | 3 | Protocol handlers (`file`/`http`/`https`/`crypto`) | URL scheme dispatch in `s->io_open` | URL scheme prefix |
 | 4 | `ff_is_http_proto` detection | `[L296], [L316], [L335], [L2875]` | Always invoked; result gates branches |
 | 5 | AES-128 crypto pipeline | `do_encrypt` `[L641-L711]`, `hls_encryption_start` `[L714-L771]` | `hls_enc=1` OR `hls_key_info_file` set |
-| 6 | HLS Sample Encryption (demuxer) | `ff_hls_senc_decrypt_frame` `[hls_sample_encryption.h:L63]` | Demuxer sees `STREAM_TYPE_HLS_SE_*` in PMT |
+| 6 | HLS Sample Encryption (demuxer) | `ff_hls_senc_decrypt_frame` `[libavformat/hls_sample_encryption.h:L63]` | Demuxer sees `STREAM_TYPE_HLS_SE_*` in PMT |
 | 7 | `hls_segment_filename` templating | `replace_int_data_in_filename` `[L422-L468]`, `replace_str_data_in_filename` `[L382-L420]`, `sls_flags_filename_process` `[L908-L946]` | Placeholder present in template AND corresponding flag set |
 | 8 | `use_localtime` `strftime` expansion | `strftime_expand` `[L269-L290]` | `use_localtime=1` |
 | 9 | MPEG-TS sub-muxer | `ff_write_chained` `[L2679]`, `vs->oformat = &ff_mpegts_muxer.p` `[L2995]` | `hls_segment_type=mpegts` (default) |
