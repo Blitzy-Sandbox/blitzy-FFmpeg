@@ -573,7 +573,7 @@ These constants are not specific to FFmpeg's HLS code — they are general MPEG-
 
 **Plain-language summary.** The HLS muxer's `HLSContext` is reached through `AVFormatContext::priv_data`; the muxer reads and writes a small set of public `AVFormatContext` fields during its lifecycle. The table below lists only the fields the HLS pipeline (muxer or demuxer) actually touches — it is **not** the full `AVFormatContext` field list. The full list is documented by the standard FFmpeg Doxygen output for `libavformat/avformat.h`.
 
-The `AVFormatContext` struct is defined at `[libavformat/avformat.h:L1265-L<end>]`.
+The `AVFormatContext` struct is defined at `[libavformat/avformat.h:L1265-L1892]`.
 
 | Field | C Type | Purpose (HLS use) | Source Citation |
 |---|---|---|---|

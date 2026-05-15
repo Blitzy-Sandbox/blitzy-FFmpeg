@@ -57,7 +57,7 @@ Following the integrator path end-to-end yields a stable mental model of the HLS
 - **After step 4** (`exception-handling.md`), the reader knows every failure mode by symptom and `AVERROR(*)` code, and the `ignore_io_errors` toggle that distinguishes "fail fast" from "best effort" long-running output. The deliverable is operational readiness: an integrator can write retry, alerting, and fallback logic against a known taxonomy.
 - **After steps 5–7** (Layer 3 contracts), the reader has a zero-deviation checklist for any reimplementation: the M3U8 wire-format invariants, the AVOption type/default/bounds contracts, and the HTTP / AES-128 / fMP4 / Sample-Encryption external-system contracts. The deliverable is a compliance test plan: a porting team can use the contracts directly as conformance assertions.
 
-### How to Use the Engineer Port-Scoping Path
+## Reading Order — Engineer Port-Scoping Path
 
 The engineer path adds the five Layer 2 documents between the functionality survey (Layer 1) and the contracts (Layer 3). The Layer 2 deliverable is *mechanism* — how each documented behavior is achieved in code:
 

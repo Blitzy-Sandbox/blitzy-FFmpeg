@@ -35,13 +35,13 @@ For component-level descriptions of segment generation and playlist construction
 
 ---
 
-### Consumer: HLS-Compliant Media Players
+## Consumer: HLS-Compliant Media Players
 
-#### Plain-Language Summary
+### Plain-Language Summary
 
 Any client that purports to play HLS — iOS and tvOS native players, AVPlayer on macOS, Android ExoPlayer, hls.js in the browser, Roku channels, smart-TV firmware, professional broadcast monitoring tools — must accept the M3U8 manifest shape this muxer emits. Three shape contracts dominate everything else: the version number on line 2 of every playlist (which controls which other tags the client must understand), the media-sequence integer that lets the client deduplicate already-fetched segments, and the target-duration integer that tells the client how often to refresh.
 
-#### Technical Detail
+### Technical Detail
 
 **EXT-X-VERSION negotiation contract.** The version number on line 2 of every playlist is computed at `[libavformat/hlsenc.c:L1551-L1571]` as a five-outcome decision matrix:
 
@@ -60,7 +60,7 @@ The emission itself happens at `[libavformat/hlsplaylist.c:L37]` (`#EXT-X-VERSIO
 
 **EXT-X-TARGETDURATION accuracy contract.** The target duration is emitted as an integer at `[libavformat/hlsplaylist.c:L120]` (`#EXT-X-TARGETDURATION:%d\n`), computed in `hls_window` at `[libavformat/hlsenc.c:L1584-L1587]` by walking every segment currently in the playlist and taking `target_duration = lrint(en->duration)` (the largest, rounded). RFC 8216 (URL referenced inline at `[libavformat/hls.c:L26]`) requires every segment duration to be ≤ TARGETDURATION; a compliant player aborts the stream with a "segment duration exceeds target" error otherwise. Several players also use target-duration to size their playlist refresh interval (typically half the target duration in live mode), so a wrong value causes either stuttering (target too high → not enough refresh) or unnecessary load (target too low → excessive refresh).
 
-#### Worked Breakage Scenario
+### Worked Breakage Scenario
 
 Suppose a refactor of `hls_window` "optimized" the target-duration computation by reading only the first segment's duration instead of taking the max across all segments. The change would be invisible for steady-state CBR streams where every segment is exactly `hls_time` seconds long. But the moment a single segment runs long — for example because a GOP ended slightly later than expected, or because a discontinuity forced an early or late cut — the published target would be too small. Every compliant player would either:
 
@@ -71,13 +71,13 @@ The bug would not be reproducible under the FATE test suite (whose reference str
 
 ---
 
-### Consumer: CDN Ingest (HTTP Origin Servers)
+## Consumer: CDN Ingest (HTTP Origin Servers)
 
-#### Plain-Language Summary
+### Plain-Language Summary
 
 When the muxer's output URL is an `http://` or `https://` URL, the M3U8 playlist and every segment file are uploaded to a remote origin server instead of written to local disk. The CDN ingest endpoint that receives those uploads is a downstream consumer with its own contract: it must accept the muxer's choice of HTTP method (PUT by default), allow long-running persistent connections (which the muxer reuses to amortize TLS handshake cost), and tolerate HTTP DELETE for old-segment cleanup in live sliding-window mode.
 
-#### Technical Detail
+### Technical Detail
 
 **HTTP PUT default.** In `set_http_options` at `[libavformat/hlsenc.c:L337-L341]`, when the user does not explicitly set the `method` AVOption, the muxer forces `method=PUT` for any HTTP-protocol output URL:
 
@@ -95,21 +95,21 @@ This default has historical roots: PUT is the only RFC 7231 method with a clean 
 
 **`hls_base_url` semantics.** The option `hls_base_url` at `[libavformat/hlsenc.c:L3129]` is a plain string that is prepended to every segment file entry written into the playlist. The prepend itself happens inside `ff_hls_write_file_entry` at `[libavformat/hlsplaylist.c:L194-L195]` (`if (baseurl) avio_printf(out, "%s", baseurl);` immediately before the segment filename is written). The option's purpose is to bridge a split-origin deployment where the playlist is served from one host (typically a control-plane domain) and segments from another (a CDN edge). Crucially, `hls_base_url` does *not* affect the URL the muxer uploads the playlist to, nor the URL it uploads segments to — it affects only the URL strings written into the playlist text that players see. Integrators sometimes assume it controls upload routing; it does not.
 
-#### Worked Breakage Scenario
+### Worked Breakage Scenario
 
 A CDN that rejects PUT and only accepts POST (a small but real subset of object-storage gateways behave this way) will return HTTP 405 for every segment upload from the HLS muxer's default configuration. Each 405 propagates through `hlsenc_io_open` as a non-zero return value, becomes `AVERROR(EIO)` (or another I/O error from the HTTP protocol handler), and surfaces to the application as a write-packet failure. The application either terminates the muxer or, if it has set `ignore_io_errors=1` at `[libavformat/hlsenc.c:L3178]`, swallows the error and continues — but every subsequent segment is also rejected. The fix is for the integrator to set `-method POST` before invoking the muxer (or to set it via the AVOption API on the muxer's `AVFormatContext->priv_data`). The lesson for documentation readers: the default HTTP method is a load-bearing default that is invisible until an incompatible origin is encountered.
 
 ---
 
-### Consumer: FFmpeg Test Suite (`tests/` Tree)
+## Consumer: FFmpeg Test Suite (`tests/` Tree)
 
-#### Plain-Language Summary
+### Plain-Language Summary
 
 The FFmpeg `tests/` tree contains FATE (FFmpeg Automated Testing Environment) reference tests that exercise the HLS muxer and demuxer end-to-end. These tests compare the muxer's output and the demuxer's output to recorded reference files byte for byte. Any change to muxer or demuxer emission shape — even a change that is invisible to a player — will invalidate the references and break the test suite.
 
 **This section is a survey only.** The `tests/` directory is explicitly out of scope for this documentation effort per AAP §0.8.2.2. No test files are read, modified, or extended by this documentation. The purpose of this section is solely to make integrators and refactor-authors aware that the HLS pipeline has a byte-exact reference contract enforced by the project's own continuous-integration system. Anyone planning a refactor must coordinate with the test maintainer to update references in lockstep with code changes.
 
-#### Technical Detail
+### Technical Detail
 
 The HLS pipeline's test surface is, by convention, located in:
 
@@ -127,19 +127,19 @@ Because the references are byte-exact, every byte the muxer emits is part of an 
 
 The MPEG-TS sub-muxer's bytestream output also feeds FATE references; any change to packet packing, PAT/PMT scheduling, or PCR cadence in `libavformat/mpegtsenc.c` will affect the HLS reference set transitively.
 
-#### Worked Breakage Scenario
+### Worked Breakage Scenario
 
 Suppose a refactor of `ff_hls_write_playlist_header` switched the `#EXT-X-TARGETDURATION` format specifier from `%d` to `%.0f` at `[libavformat/hlsplaylist.c:L120]`. For an integer target duration the output is textually identical (`6` becomes `6` in both cases), but for any code path where `lrint` had a non-zero remainder before the conversion to `int`, the format would diverge. Even in the all-integer-output case, downstream readers using `printf("%d")` to re-emit the value would be unaffected, but any FATE reference that compares the playlist text byte-for-byte would fail because the format-string change is itself part of the source that the build is gated on. This is one of several reasons the muxer's exact emission format is a *freeze contract* — see [`../api-contracts/functional-invariants.md`](../api-contracts/functional-invariants.md) for the formal version of the contract.
 
 ---
 
-### Consumer: In-Tree DASH Muxer (`libavformat/dashenc.c`)
+## Consumer: In-Tree DASH Muxer (`libavformat/dashenc.c`)
 
-#### Plain-Language Summary
+### Plain-Language Summary
 
 FFmpeg's DASH muxer reuses the HLS pipeline's playlist tag-writer translation unit (`hlsplaylist.o`) to emit HLS-format manifests *alongside* its native DASH MPD manifest. This is the most surprising hidden dependency in the HLS pipeline: a refactor that changes the ABI or signatures of the eight `ff_hls_write_*` functions does not just change HLS muxer behavior — it changes DASH muxer behavior simultaneously, because both muxers link against the same compiled object file.
 
-#### Technical Detail
+### Technical Detail
 
 **Build-level coupling.** The coupling is declared in one line of the build system at `[libavformat/Makefile:L189]`:
 
@@ -164,7 +164,7 @@ That is: when `CONFIG_DASH_MUXER` is enabled at configure time, the DASH muxer's
 
 Each function emits one or more specific `#EXT-X-*` tags as fixed-format `avio_printf` lines (the implementation is in `libavformat/hlsplaylist.c` lines 32 through 206). A signature change to any of these eight functions — adding a parameter, changing a parameter type, changing the return type, renaming, removing — would require synchronous updates to both `hlsenc.c` and `dashenc.c`. Adding a new tag emission inside one of these functions changes the HLS *and* the DASH-emitted HLS manifest in lockstep.
 
-#### Worked Breakage Scenario
+### Worked Breakage Scenario
 
 Suppose a refactor concluded that the `iframe_mode` parameter of `ff_hls_write_playlist_header` at `[libavformat/hlsplaylist.h:L50-L52]` was "HLS-specific" (because `#EXT-X-I-FRAMES-ONLY` is an HLS concept) and removed it. The change would compile cleanly inside `hlsenc.c` because the I-frame emission path is updated locally. But `dashenc.c`'s call site — which today passes 0 for that parameter, because DASH manifests do not use the I-frames-only tag — would now have a parameter-mismatch error, breaking the entire DASH muxer build.
 
@@ -172,13 +172,13 @@ The reverse direction is just as fragile: adding a new feature to `ff_hls_write_
 
 ---
 
-### Consumer: Generic `segment` Muxer (`libavformat/segment.c`)
+## Consumer: Generic `segment` Muxer (`libavformat/segment.c`)
 
-#### Plain-Language Summary
+### Plain-Language Summary
 
 FFmpeg ships a generic alternative segmenter at `[libavformat/segment.c]`, registered as `ff_segment_muxer` and `ff_stream_segment_muxer`. It is a separate format from the HLS muxer, with separate code, separate option table, and separate output conventions. It can emit an M3U8 playlist as a side-channel artifact, but the M3U8 it emits is not byte-compatible with the HLS muxer's output, and the segment files it produces are configured through a different mechanism. Integrators sometimes mistake one muxer for the other because both produce `.ts` files with an accompanying `.m3u8`; the existing user-facing documentation at `[doc/muxers.texi:§hls]` explicitly cross-references the alternative.
 
-#### Technical Detail
+### Technical Detail
 
 **Registration.** Two muxers are registered:
 
@@ -197,7 +197,7 @@ This is the canonical pointer from HLS-muxer users to the alternative. It is the
 
 **Why the two are not interchangeable.** The `segment` muxer does not link against `hlsplaylist.o` — the Makefile at `[libavformat/Makefile]` declares `OBJS-$(CONFIG_SEGMENT_MUXER) += segment.o` without any HLS dependency. It therefore does *not* call into `ff_hls_write_playlist_version`, `ff_hls_write_playlist_header`, or any of the other shared writers. Instead, it constructs its M3U8 (when configured to do so via `-segment_list_type m3u8`) through a separate code path inside `segment.c` that has its own emission order, its own handling of `EXT-X-VERSION`, and its own handling of `EXT-X-TARGETDURATION`. The output is *valid* M3U8 (and is accepted by many players), but it is not byte-compatible with what `ff_hls_muxer` emits, and it does not implement the full HLS feature set (encryption modes, variant streams, fMP4 segments, sample encryption, program-date-time injection, periodic rekeying, et cetera).
 
-#### Worked Breakage Scenario
+### Worked Breakage Scenario
 
 Suppose an integrator notices a feature gap in `-f hls` — for example, they need a custom segment-naming pattern that `hls_segment_filename` does not support — and decides to switch to `-f segment -segment_format hls -segment_list_type m3u8` to gain access to the more flexible templating in the `segment` muxer. They re-run their pipeline, the new M3U8 looks superficially similar, and the test passes locally. In production, however, their player begins rejecting the manifest with a vendor-specific error code, because (for example) the `segment` muxer's M3U8 lacks `#EXT-X-PLAYLIST-TYPE:EVENT` or has a different ordering of leading metadata tags.
 
@@ -205,13 +205,13 @@ The integrator's diagnostic loop is slow because the new manifest *is* valid M3U
 
 ---
 
-### Breakage Analysis: If `hlsenc.c` Stopped Producing Valid M3U8
+## Breakage Analysis: If `hlsenc.c` Stopped Producing Valid M3U8
 
-#### Plain-Language Summary
+### Plain-Language Summary
 
 The HLS muxer is a *load-bearing* component for any FFmpeg consumer that publishes HLS. There is no in-tree fallback for `-f hls`: the `segment` muxer is the closest alternative but produces different M3U8 conventions and does not implement the HLS feature set; the DASH muxer publishes DASH MPD (with HLS-via-`hlsplaylist` only as a side channel), not the same shape as the HLS muxer's primary output. A hypothetical removal or breakage of `hlsenc.c` would silently degrade the HLS publishing capability of every downstream consumer that has not built in its own fallback logic.
 
-#### Technical Detail
+### Technical Detail
 
 **No fallback in `ff_hls_muxer`.** The format-registration definition at `[libavformat/hlsenc.c:L3191-L3207]` declares the muxer's identity, codec defaults, format flags, private class, and lifecycle callback slots. The field assignments are summarized in the table below; the registration itself contains no alternative or deprecation pointer.
 
@@ -245,7 +245,7 @@ OBJS-$(CONFIG_HLS_MUXER)                 += hlsenc.o hlsplaylist.o
 
 Disabling `CONFIG_HLS_MUXER` at configure time would omit both `hlsenc.o` and `hlsplaylist.o` from the build. This has a second-order effect on the DASH muxer: `dashenc.c` *expects* `hlsplaylist.o` to be present in its object set (see `[libavformat/Makefile:L189]`), but only because it independently lists `hlsplaylist.o` in its own line. Disabling `CONFIG_HLS_MUXER` does *not* prevent the DASH muxer from also including `hlsplaylist.o` — the two lines accumulate into the same object set independently, so DASH continues to link `hlsplaylist.o` even when HLS is disabled. This is a build-system design choice that keeps the DASH muxer independent of whether HLS is configured.
 
-#### Worked Breakage Scenario
+### Worked Breakage Scenario
 
 Suppose `hlsenc.c` is removed from the build via `--disable-muxer=hls` at FFmpeg's configure stage. The effect cascades:
 

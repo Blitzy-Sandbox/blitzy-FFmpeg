@@ -321,7 +321,7 @@ AES-128-CBC requires a 16-byte initialization vector. The HLS muxer derives the 
 |------|---------|------------|----------|
 | 1. `hls_key_info_file` line 3 | `key_info_file` is set AND the file's third line is non-empty | The hex string on line 3 of the 3-line key-info file is copied verbatim into `vs->iv_string`. | `[libavformat/hlsenc.c:L737-L738]` |
 | 2. `hls_enc_iv` AVOption | `hls_enc_iv` is set AND `iv_string` is currently empty | The supplied bytes (16 bytes) are copied into the IV buffer, then hex-encoded. | `[libavformat/hlsenc.c:L666-L676]` (via `hls->iv` at L673) |
-| 3. Sequence-number derived | No user-supplied IV present, `iv_string` is empty | `iv[0..7] = 0x00`, `iv[8..15] = big-endian `vs->sequence` via `AV_WB64`. The 16-byte IV is then hex-encoded to `iv_string`. | `[libavformat/hlsenc.c:L666-L676]` |
+| 3. Sequence-number derived | No user-supplied IV present, `iv_string` is empty | `iv[0..7] = 0x00`, then `iv[8..15] = big-endian vs->sequence via AV_WB64`. The 16-byte IV is then hex-encoded to `iv_string`. | `[libavformat/hlsenc.c:L666-L676]` |
 | 4. Inherited from previous segment | `iv_string` is already populated from a prior derivation in this session | The cached `iv_string` is reused. | `[libavformat/hlsenc.c:L666]` (gate on `if (!*hls->iv_string)`) |
 
 ### KEYSIZE and IV size
